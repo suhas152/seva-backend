@@ -27,9 +27,20 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 const User = require('./models/User');
 const bcrypt = require('bcryptjs');
 
+// --- DIAGNOSTIC LOGGING START --- //
+const mongoUriForDiag = process.env.MONGO_URI;
+if (mongoUriForDiag) {
+    const maskedUri = mongoUriForDiag.replace(/:([^:]+)@/, ':*****@');
+    console.log(`DIAGNOSTIC: Attempting to connect to: ${maskedUri}`);
+} else {
+    console.error('DIAGNOSTIC: MONGO_URI environment variable NOT SET!');
+}
+// --- DIAGNOSTIC LOGGING END --- //
+
 mongoose.connect(process.env.MONGO_URI)
 .then(async () => {
-    console.log('MongoDB connected');
+    console.log('MongoDB connected successfully!');
+    // Admin user creation logic follows...
     try {
         const existingAdmin = await User.findOne({ role: 'admin' });
         if (!existingAdmin) {
@@ -41,13 +52,15 @@ mongoose.connect(process.env.MONGO_URI)
                 password: hashedPassword,
                 role: 'admin',
             });
-            console.log('Admin user created');
+            console.log('Admin user created successfully.');
         }
     } catch (error) {
-        console.error('Error bootstrapping admin:', error);
+        console.error('Error during admin user bootstrap:', error);
     }
 })
-.catch(err => console.log(err));
+.catch(err => {
+    console.error('FATAL: MongoDB connection failed. Full error object:', err);
+});
 
 app.get('/', (req, res) => {
     res.send('API is running...');
