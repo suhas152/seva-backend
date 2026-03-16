@@ -13,7 +13,16 @@ const app = express();
 app.use(express.json());
 const allowedOrigins = (process.env.FRONTEND_URL || '').split(',').filter(Boolean);
 app.use(cors({
-  origin: allowedOrigins.length ? allowedOrigins : true,
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin) || allowedOrigins.length === 0) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 // Serve static files from uploads directory
@@ -27,10 +36,21 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 const User = require('./models/User');
 const bcrypt = require('bcryptjs');
 
-mongoose.connect(process.env.MONGO_URI)
-.then(async () => {
-    console.log('MongoDB connected');
+const connectDB = async () => {
+    if (mongoose.connection.readyState >= 1) {
+        return;
+    }
+    
     try {
+        await mongoose.connect(process.env.MONGO_URI, {
+            bufferCommands: false,
+            autoIndex: false,
+            connectTimeoutMS: 10000, // Make it fail faster
+            socketTimeoutMS: 45000,
+        });
+        console.log('MongoDB connected successfully');
+        
+        // Admin bootstrap logic
         const existingAdmin = await User.findOne({ role: 'admin' });
         if (!existingAdmin) {
             const salt = await bcrypt.genSalt(10);
@@ -43,11 +63,13 @@ mongoose.connect(process.env.MONGO_URI)
             });
             console.log('Admin user created');
         }
-    } catch (error) {
-        console.error('Error bootstrapping admin:', error);
+    } catch (err) {
+        console.error('MongoDB connection error:', err);
     }
-})
-.catch(err => console.log(err));
+};
+
+// Start connection but don't block the initial load
+connectDB();
 
 app.get('/', (req, res) => {
     res.send('API is running...');
