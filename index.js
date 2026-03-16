@@ -8,7 +8,61 @@ const fs = require('fs');
 
 dotenv.config();
 
+// Connect to MongoDB
+const User = require('./models/User');
+const bcrypt = require('bcryptjs');
+
+let cachedConnection = null;
+
+const connectDB = async () => {
+    if (cachedConnection) {
+        return cachedConnection;
+    }
+    
+    try {
+        cachedConnection = await mongoose.connect(process.env.MONGO_URI, {
+            autoIndex: false,
+            connectTimeoutMS: 20000,
+            socketTimeoutMS: 45000,
+            serverSelectionTimeoutMS: 20000,
+        });
+        console.log('MongoDB connected successfully');
+        
+        // Admin bootstrap logic
+        const existingAdmin = await User.findOne({ role: 'admin' });
+        if (!existingAdmin) {
+            const salt = await bcrypt.genSalt(10);
+            const hashedPassword = await bcrypt.hash(process.env.ADMIN_PASSWORD || 'password', salt);
+            await User.create({
+                name: process.env.ADMIN_NAME || 'Admin',
+                email: process.env.ADMIN_EMAIL || 'admin@example.com',
+                password: hashedPassword,
+                role: 'admin',
+            });
+            console.log('Admin user created');
+        }
+        return cachedConnection;
+    } catch (err) {
+        cachedConnection = null;
+        console.error('MongoDB connection error:', err);
+        throw err;
+    }
+};
+
 const app = express();
+
+// Database connection middleware for serverless
+app.use(async (req, res, next) => {
+    try {
+        await connectDB();
+        next();
+    } catch (err) {
+        res.status(503).json({ 
+            message: 'Database connection failed', 
+            error: err.message 
+        });
+    }
+});
 
 app.use(express.json());
 const allowedOrigins = (process.env.FRONTEND_URL || '').split(',').filter(Boolean);
@@ -32,44 +86,7 @@ if (!fs.existsSync(uploadsDir)) {
 }
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Connect to MongoDB
-const User = require('./models/User');
-const bcrypt = require('bcryptjs');
 
-const connectDB = async () => {
-    if (mongoose.connection.readyState >= 1) {
-        return;
-    }
-    
-    try {
-        await mongoose.connect(process.env.MONGO_URI, {
-            autoIndex: false,
-            connectTimeoutMS: 10000,
-            socketTimeoutMS: 45000,
-            serverSelectionTimeoutMS: 10000,
-        });
-        console.log('MongoDB connected successfully');
-        
-        // Admin bootstrap logic
-        const existingAdmin = await User.findOne({ role: 'admin' });
-        if (!existingAdmin) {
-            const salt = await bcrypt.genSalt(10);
-            const hashedPassword = await bcrypt.hash(process.env.ADMIN_PASSWORD || 'password', salt);
-            await User.create({
-                name: process.env.ADMIN_NAME || 'Admin',
-                email: process.env.ADMIN_EMAIL || 'admin@example.com',
-                password: hashedPassword,
-                role: 'admin',
-            });
-            console.log('Admin user created');
-        }
-    } catch (err) {
-        console.error('MongoDB connection error:', err);
-    }
-};
-
-// Start connection but don't block the initial load
-connectDB();
 
 app.get('/', (req, res) => {
     res.send('API is running...');
