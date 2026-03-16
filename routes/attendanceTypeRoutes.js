@@ -4,7 +4,6 @@ const multer = require('multer');
 const path = require('path');
 const { markGeneral, postWard, getMy, getAll, verify, dismiss } = require('../controllers/attendanceTypeController');
 const { protect, authorize } = require('../middleware/authMiddleware');
-
 const { storage } = require('../config/cloudinary');
 
 const upload = multer({
@@ -17,13 +16,28 @@ const upload = multer({
     if (extname && mimetype) {
       return cb(null, true);
     } else {
-      cb(new Error('Images only!'));
+      return cb(new Error('Images only!'));
     }
   }
 });
 
 router.post('/general', protect, authorize('student'), markGeneral);
-router.post('/ward', protect, authorize('ward'), upload.single('photo'), postWard);
+
+router.post(
+  '/ward',
+  protect,
+  authorize('ward'),
+  (req, res, next) => {
+    upload.single('photo')(req, res, function (err) {
+      if (err) {
+        return res.status(400).json({ message: err.message });
+      }
+      next();
+    });
+  },
+  postWard
+);
+
 router.get('/my', protect, getMy);
 router.get('/all', protect, authorize('admin'), getAll);
 router.patch('/:id/verify', protect, authorize('admin'), verify);
