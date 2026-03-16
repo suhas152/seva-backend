@@ -128,7 +128,7 @@ const updateProfile = async (req, res) => {
                 user.contactNumber = req.body.contactNumber;
             }
             if (req.file) {
-                user.profileImage = `/uploads/${req.file.filename}`;
+                user.profileImage = req.file.path;
             }
 
             const updatedUser = await user.save();
