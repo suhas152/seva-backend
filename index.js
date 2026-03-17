@@ -65,14 +65,18 @@ app.use(async (req, res, next) => {
 });
 
 app.use(express.json());
-const allowedOrigins = (process.env.FRONTEND_URL || '').split(',').filter(Boolean);
+const allowedOrigins = (process.env.FRONTEND_URL || '').split(',').map(o => o.trim()).filter(Boolean);
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin) || allowedOrigins.length === 0) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
+    // Allow requests with no origin (mobile apps, curl, Postman)
+    if (!origin) return callback(null, true);
+    // Allow if no restrictions set (dev mode)
+    if (allowedOrigins.length === 0) return callback(null, true);
+    // Allow exact match
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    // Allow any vercel.app subdomain (covers preview deployments)
+    if (origin.endsWith('.vercel.app')) return callback(null, true);
+    callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -98,6 +102,7 @@ app.use('/api/menu', require('./routes/menuRoutes'));
 app.use('/api/attendance', require('./routes/attendanceRoutes'));
 app.use('/api/attendance-types', require('./routes/attendanceTypeRoutes'));
 app.use('/api/movement', require('./routes/movementRoutes'));
+app.use('/api/notifications', require('./routes/notificationRoutes'));
 app.use('/api', require('./routes/healthRoutes'));
 
 const PORT = process.env.PORT || 5000;

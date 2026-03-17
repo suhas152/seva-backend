@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/notifications/next-day-meals",
+      "schedule": "40 18 * * *"
+    }
+  ]
+}
