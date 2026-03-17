@@ -1,7 +1,7 @@
 const MealNotificationLog = require('../models/MealNotificationLog');
 const {
   prepareNextDayMealSummary,
-  sendWhatsappTextMessage,
+  sendSummaryEmail,
 } = require('../services/mealNotificationService');
 
 const sendNextDayMealSummary = async (req, res) => {
@@ -11,7 +11,7 @@ const sendNextDayMealSummary = async (req, res) => {
 
     if (!payload.recipients.length) {
       return res.status(400).json({
-        message: 'No WhatsApp recipients configured',
+        message: 'No email recipients configured',
       });
     }
 
@@ -22,7 +22,7 @@ const sendNextDayMealSummary = async (req, res) => {
 
     if (existingLog && !force) {
       return res.json({
-        message: 'Meal summary already sent for this target date',
+        message: 'Meal summary email already sent for this target date',
         targetDate: payload.targetDate,
         recipients: existingLog.recipients,
         skipped: true,
@@ -30,9 +30,10 @@ const sendNextDayMealSummary = async (req, res) => {
     }
 
     for (const recipient of payload.recipients) {
-      await sendWhatsappTextMessage({
+      await sendSummaryEmail({
         to: recipient,
-        body: payload.message,
+        subject: payload.subject,
+        text: payload.message,
       });
     }
 
@@ -57,7 +58,7 @@ const sendNextDayMealSummary = async (req, res) => {
     );
 
     res.json({
-      message: 'Next-day meal summary sent successfully',
+      message: 'Next-day meal summary email sent successfully',
       targetDate: payload.targetDate,
       recipients: payload.recipients,
       totalUniqueStudents: payload.summary.totalUniqueStudents,
@@ -70,7 +71,7 @@ const sendNextDayMealSummary = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({
-      message: 'Failed to send next-day meal summary',
+      message: 'Failed to send next-day meal summary email',
       error: error.message,
     });
   }

@@ -24,13 +24,13 @@ const getDateRangeForBusinessDay = (isoDate) => {
   return { start, end };
 };
 
-const sanitizeRecipient = (value) => (value || '').replace(/[^\d]/g, '');
+const sanitizeRecipient = (value) => (value || '').trim().toLowerCase();
 
 const getRecipients = () => {
   const configured = [
-    process.env.ADMIN_WHATSAPP_NUMBER,
-    process.env.COOK_WHATSAPP_NUMBER,
-    ...(process.env.WHATSAPP_RECIPIENTS || '').split(','),
+    process.env.ADMIN_SUMMARY_EMAIL,
+    process.env.COOK_SUMMARY_EMAIL,
+    ...(process.env.SUMMARY_EMAIL_RECIPIENTS || '').split(','),
   ];
 
   return [...new Set(configured.map(sanitizeRecipient).filter(Boolean))];
@@ -82,7 +82,7 @@ const buildMealSummary = async ({ targetDate }) => {
   return summary;
 };
 
-const createWhatsappMessage = ({ summary, generatedForDate }) => {
+const createEmailMessage = ({ summary, generatedForDate }) => {
   const dateLabel = new Intl.DateTimeFormat('en-IN', {
     timeZone: DEFAULT_TZ,
     dateStyle: 'full',
@@ -103,22 +103,22 @@ const createWhatsappMessage = ({ summary, generatedForDate }) => {
   ].join('\n');
 };
 
-const sendWhatsappTextMessage = async ({ to, body }) => {
-  if (!process.env.WHATSAPP_PHONE_NUMBER_ID || !process.env.WHATSAPP_ACCESS_TOKEN) {
-    throw new Error('WhatsApp credentials are not configured');
+const sendSummaryEmail = async ({ to, subject, text }) => {
+  if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) {
+    throw new Error('Email credentials are not configured');
   }
 
   await axios.post(
-    `https://graph.facebook.com/v23.0/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`,
+    'https://api.resend.com/emails',
     {
-      messaging_product: 'whatsapp',
       to,
-      type: 'text',
-      text: { body },
+      from: process.env.EMAIL_FROM,
+      subject,
+      text,
     },
     {
       headers: {
-        Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
+        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
         'Content-Type': 'application/json',
       },
       timeout: 20000,
@@ -136,15 +136,16 @@ const prepareNextDayMealSummary = async () => {
     targetDate,
     recipients,
     summary,
-    message: createWhatsappMessage({ summary, generatedForDate: targetDate }),
+    subject: `Meal summary for ${targetDate}`,
+    message: createEmailMessage({ summary, generatedForDate: targetDate }),
   };
 };
 
 module.exports = {
   buildMealSummary,
-  createWhatsappMessage,
+  createEmailMessage,
   getRecipients,
   getIsoDateInTimezone,
   prepareNextDayMealSummary,
-  sendWhatsappTextMessage,
+  sendSummaryEmail,
 };
