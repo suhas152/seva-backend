@@ -1,4 +1,4 @@
-const axios = require('axios');
+const nodemailer = require('nodemailer');
 const Attendance = require('../models/Attendance');
 
 const DEFAULT_TZ = 'Asia/Kolkata';
@@ -103,27 +103,31 @@ const createEmailMessage = ({ summary, generatedForDate }) => {
   ].join('\n');
 };
 
-const sendSummaryEmail = async ({ to, subject, text }) => {
-  if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) {
+const createMailTransport = () => {
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASS || !process.env.EMAIL_FROM) {
     throw new Error('Email credentials are not configured');
   }
 
-  await axios.post(
-    'https://api.resend.com/emails',
-    {
-      to,
-      from: process.env.EMAIL_FROM,
-      subject,
-      text,
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: String(process.env.SMTP_SECURE || 'false').toLowerCase() === 'true',
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
     },
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      timeout: 20000,
-    }
-  );
+  });
+};
+
+const sendSummaryEmail = async ({ to, subject, text }) => {
+  const transporter = createMailTransport();
+
+  await transporter.sendMail({
+    from: process.env.EMAIL_FROM,
+    to,
+    subject,
+    text,
+  });
 };
 
 const prepareNextDayMealSummary = async () => {
@@ -144,6 +148,7 @@ const prepareNextDayMealSummary = async () => {
 module.exports = {
   buildMealSummary,
   createEmailMessage,
+  createMailTransport,
   getRecipients,
   getIsoDateInTimezone,
   prepareNextDayMealSummary,
